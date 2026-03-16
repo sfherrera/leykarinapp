@@ -34,6 +34,11 @@
         </div>
     </div>
 
+    @if (modoOffline)
+    {
+        <div class="alert-offline">📶 Sin conexión — los tipos se cargaron desde el caché local</div>
+    }
+
     @if (!string.IsNullOrEmpty(errorMensaje))
     {
         <div class="alert-error">⚠️ @errorMensaje</div>
@@ -269,6 +274,7 @@
     private bool cargando = true;
     private bool enviando = false;
     private bool tipoOtro = false;
+    private bool modoOffline = false;
     private string? errorMensaje;
     private List<TipoDenunciaDto> tiposDenuncia = [];
     private readonly DenunciaFormModel modelo = new();
@@ -281,7 +287,19 @@
             return;
         }
 
-        tiposDenuncia = await Api.ObtenerTiposAsync(Config.EmpresaSlug);
+        try
+        {
+            var tipos = await Api.ObtenerTiposAsync(Config.EmpresaSlug);
+            tiposDenuncia = tipos;
+            // Si todos tienen Guid.Empty, vinieron del fallback (offline)
+            modoOffline = tiposDenuncia.All(t => t.Id == Guid.Empty);
+        }
+        catch
+        {
+            tiposDenuncia = Api.CargarTiposDesdeCache();
+            modoOffline = true;
+        }
+
         cargando = false;
     }
 

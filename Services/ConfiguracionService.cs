@@ -8,20 +8,20 @@ public class ConfiguracionService
 
     public string ServidorUrl
     {
-        get => Preferences.Default.Get(KeyServidor, string.Empty);
-        set => Preferences.Default.Set(KeyServidor, value);
+        get => ObtenerPreferencia(KeyServidor);
+        set => GuardarPreferencia(KeyServidor, value);
     }
 
     public string EmpresaSlug
     {
-        get => Preferences.Default.Get(KeySlug, string.Empty);
-        set => Preferences.Default.Set(KeySlug, value);
+        get => ObtenerPreferencia(KeySlug);
+        set => GuardarPreferencia(KeySlug, value);
     }
 
     public string EmpresaNombre
     {
-        get => Preferences.Default.Get(KeyNombre, string.Empty);
-        set => Preferences.Default.Set(KeyNombre, value);
+        get => ObtenerPreferencia(KeyNombre);
+        set => GuardarPreferencia(KeyNombre, value);
     }
 
     public bool EstaConfigurada =>
@@ -29,8 +29,24 @@ public class ConfiguracionService
 
     public void Limpiar()
     {
-        Preferences.Default.Remove(KeyServidor);
-        Preferences.Default.Remove(KeySlug);
-        Preferences.Default.Remove(KeyNombre);
+        try
+        {
+            Preferences.Remove(KeyServidor);
+            Preferences.Remove(KeySlug);
+            Preferences.Remove(KeyNombre);
+        }
+        catch { /* ignore */ }
+    }
+
+    private static string ObtenerPreferencia(string key)
+    {
+        try { return Preferences.Get(key, string.Empty); }
+        catch { return string.Empty; }
+    }
+
+    private static void GuardarPreferencia(string key, string value)
+    {
+        try { Preferences.Set(key, value); }
+        catch { /* ignore */ }
     }
 }

@@ -13,8 +13,22 @@
         <p class="brand-sub">Canal de Denuncias — Ley N° 21.643</p>
     </div>
 
-    @if (Config.EstaConfigurada && empresaInfo != null)
+    @if (iniciando)
     {
+        <div class="loading-center">
+            <div class="spinner"></div>
+            <p>Iniciando...</p>
+        </div>
+    }
+    else if (Config.EstaConfigurada && empresaInfo != null)
+    {
+        @if (modoOffline)
+        {
+            <div class="alert-offline">
+                📶 Sin conexión — trabajando en modo offline
+            </div>
+        }
+
         <div class="config-card">
             <div class="empresa-badge">
                 <span class="empresa-icon">🏢</span>
@@ -80,14 +94,46 @@
     private string slug = string.Empty;
     private string? errorConexion;
     private bool conectando;
+    private bool iniciando = true;
+    private bool modoOffline;
     private EmpresaInfoDto? empresaInfo;
 
     protected override async Task OnInitializedAsync()
     {
-        if (Config.EstaConfigurada)
+        try
         {
-            empresaInfo = await Api.ObtenerInfoEmpresaAsync(Config.EmpresaSlug);
-            if (empresaInfo == null) Config.Limpiar();
+            if (Config.EstaConfigurada)
+            {
+                var info = await Api.ObtenerInfoEmpresaAsync(Config.EmpresaSlug);
+                if (info != null)
+                {
+                    empresaInfo = info;
+                    modoOffline = false;
+                }
+                else
+                {
+                    // Sin conexión: usar nombre guardado del dispositivo
+                    var nombreGuardado = Config.EmpresaNombre;
+                    if (!string.IsNullOrEmpty(nombreGuardado))
+                    {
+                        empresaInfo = new EmpresaInfoDto(nombreGuardado, Config.EmpresaSlug, "#1e40af", "#3b82f6");
+                        modoOffline = true;
+                    }
+                    else
+                    {
+                        Config.Limpiar();
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Si falla, mostrar pantalla de configuración
+            Config.Limpiar();
+        }
+        finally
+        {
+            iniciando = false;
         }
     }
 
@@ -100,21 +146,32 @@
         { errorConexion = "Ingresa el código de empresa."; return; }
 
         conectando = true;
-        Config.ServidorUrl = servidorUrl.Trim();
-        Config.EmpresaSlug = slug.Trim().ToLower();
+        try
+        {
+            Config.ServidorUrl = servidorUrl.Trim();
+            Config.EmpresaSlug = slug.Trim().ToLower();
 
-        var info = await Api.ObtenerInfoEmpresaAsync(Config.EmpresaSlug);
-        if (info == null)
+            var info = await Api.ObtenerInfoEmpresaAsync(Config.EmpresaSlug);
+            if (info == null)
+            {
+                Config.Limpiar();
+                errorConexion = "No se pudo conectar. Verifica la URL y el código.";
+                return;
+            }
+
+            Config.EmpresaNombre = info.Nombre;
+            empresaInfo = info;
+            modoOffline = false;
+        }
+        catch
         {
             Config.Limpiar();
-            errorConexion = "No se pudo conectar. Verifica la URL y el código.";
-            conectando = false;
-            return;
+            errorConexion = "Error al conectar. Verifica tu conexión e intenta nuevamente.";
         }
-
-        Config.EmpresaNombre = info.Nombre;
-        empresaInfo = info;
-        conectando = false;
+        finally
+        {
+            conectando = false;
+        }
     }
 
     private void CambiarEmpresa()
@@ -124,6 +181,7 @@
         servidorUrl = string.Empty;
         slug = string.Empty;
         errorConexion = null;
+        modoOffline = false;
     }
 
     private void IrANuevaDenuncia() => Nav.NavigateTo("/nueva-denuncia");
