@@ -1,0 +1,377 @@
+@page "/nueva-denuncia"
+@using LeyKarinApp.Services
+@using LeyKarinApp.Models
+@inject ConfiguracionService Config
+@inject DenunciaApiService Api
+@inject NavigationManager Nav
+
+<div class="app-screen">
+
+    <!-- Header -->
+    <div class="page-header">
+        <button class="btn-back" @onclick="Volver">←</button>
+        <div class="page-header-text">
+            <h2 class="page-title">Nueva denuncia</h2>
+            <p class="page-empresa">@Config.EmpresaNombre</p>
+        </div>
+    </div>
+
+    <!-- Indicador de pasos -->
+    <div class="steps-bar">
+        <div class="step @(paso >= 1 ? "step-active" : "")">
+            <div class="step-circle">1</div>
+            <span>Tipo</span>
+        </div>
+        <div class="step-line @(paso >= 2 ? "step-line-active" : "")"></div>
+        <div class="step @(paso >= 2 ? "step-active" : "")">
+            <div class="step-circle">2</div>
+            <span>Detalles</span>
+        </div>
+        <div class="step-line @(paso >= 3 ? "step-line-active" : "")"></div>
+        <div class="step @(paso >= 3 ? "step-active" : "")">
+            <div class="step-circle">3</div>
+            <span>Revisar</span>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMensaje))
+    {
+        <div class="alert-error">⚠️ @errorMensaje</div>
+    }
+
+    @if (cargando)
+    {
+        <div class="loading-center">
+            <div class="spinner"></div>
+            <p>Cargando...</p>
+        </div>
+    }
+    else
+    {
+
+        <!-- ─── PASO 1: TIPO ─── -->
+        @if (paso == 1)
+        {
+            <div class="step-content">
+                <h3 class="step-heading">¿Qué deseas denunciar?</h3>
+                <p class="step-desc">Selecciona la categoría que mejor describe la situación.</p>
+
+                <div class="tipos-grid">
+                    @foreach (var tipo in tiposDenuncia)
+                    {
+                        <div class="tipo-card @(modelo.TipoDenunciaId == tipo.Id ? "tipo-selected" : "")"
+                             @onclick="() => SeleccionarTipo(tipo.Id)">
+                            <div class="tipo-icon">@(ObtenerIcono(tipo.Nombre))</div>
+                            <div class="tipo-nombre">@tipo.Nombre</div>
+                            @if (!string.IsNullOrEmpty(tipo.Descripcion))
+                            {
+                                <div class="tipo-desc">@tipo.Descripcion</div>
+                            }
+                        </div>
+                    }
+                    <div class="tipo-card @(tipoOtro ? "tipo-selected" : "")"
+                         @onclick="SeleccionarOtro">
+                        <div class="tipo-icon">•••</div>
+                        <div class="tipo-nombre">Otra conducta</div>
+                        <div class="tipo-desc">Situación no contemplada en las categorías anteriores.</div>
+                    </div>
+                </div>
+
+                <div class="anonimato-box">
+                    <p class="anonimato-label">¿Cómo presentas la denuncia?</p>
+                    <div class="radio-group">
+                        <label class="radio-option @(modelo.EsAnonima ? "radio-selected" : "")"
+                               @onclick='() => modelo.EsAnonima = true'>
+                            <span class="radio-dot @(modelo.EsAnonima ? "radio-dot-on" : "")"></span>
+                            <div>
+                                <strong>Anónima</strong>
+                                <p>No revelaré mi identidad</p>
+                            </div>
+                        </label>
+                        <label class="radio-option @(!modelo.EsAnonima ? "radio-selected" : "")"
+                               @onclick='() => modelo.EsAnonima = false'>
+                            <span class="radio-dot @(!modelo.EsAnonima ? "radio-dot-on" : "")"></span>
+                            <div>
+                                <strong>Identificada</strong>
+                                <p>Incluiré mis datos de contacto</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <button class="btn-primary-app"
+                        @onclick="IrPaso2"
+                        disabled="@(!modelo.TipoDenunciaId.HasValue && !tipoOtro)">
+                    Continuar →
+                </button>
+            </div>
+        }
+
+        <!-- ─── PASO 2: DETALLES ─── -->
+        @if (paso == 2)
+        {
+            <div class="step-content">
+                <h3 class="step-heading">Descripción de los hechos</h3>
+                <p class="step-desc">Proporciona el mayor detalle posible.</p>
+
+                <div class="form-field">
+                    <label class="field-label">Descripción <span class="required">*</span></label>
+                    <textarea class="field-textarea" rows="5"
+                              placeholder="Describe lo ocurrido: qué pasó, cuándo, dónde, quiénes estaban presentes..."
+                              @bind="modelo.DescripcionHechos"></textarea>
+                    <span class="field-hint">Mínimo 30 caracteres (@modelo.DescripcionHechos.Length/30)</span>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-field half">
+                        <label class="field-label">Fecha aproximada</label>
+                        <input class="field-input" type="date"
+                               value="@(modelo.FechaHechos?.ToString("yyyy-MM-dd"))"
+                               @onchange="e => modelo.FechaHechos = string.IsNullOrEmpty(e.Value?.ToString())
+                                   ? null : DateTime.Parse(e.Value!.ToString()!)" />
+                    </div>
+                    <div class="form-field half">
+                        <label class="field-label">Lugar</label>
+                        <input class="field-input" type="text"
+                               placeholder="Ej: Sala de reuniones"
+                               @bind="modelo.LugarHechos" />
+                    </div>
+                </div>
+
+                <!-- Denunciado -->
+                <div class="section-box section-red">
+                    <p class="section-title">👤 Persona denunciada (opcional)</p>
+                    <div class="form-row">
+                        <input class="field-input half" type="text" placeholder="Nombres"
+                               @bind="modelo.NombresDenunciado" />
+                        <input class="field-input half" type="text" placeholder="Apellidos"
+                               @bind="modelo.ApellidosDenunciado" />
+                    </div>
+                    <div class="form-row">
+                        <input class="field-input half" type="text" placeholder="Cargo"
+                               @bind="modelo.CargoDenunciado" />
+                        <input class="field-input half" type="text" placeholder="Relación (jefe, par...)"
+                               @bind="modelo.RelacionConDenunciante" />
+                    </div>
+                </div>
+
+                <!-- Denunciante (si no anónima) -->
+                @if (!modelo.EsAnonima)
+                {
+                    <div class="section-box section-green">
+                        <p class="section-title">✅ Tus datos de contacto</p>
+                        <div class="form-row">
+                            <input class="field-input half" type="text" placeholder="Nombres *"
+                                   @bind="modelo.NombresDenunciante" />
+                            <input class="field-input half" type="text" placeholder="Apellidos *"
+                                   @bind="modelo.ApellidosDenunciante" />
+                        </div>
+                        <div class="form-row">
+                            <input class="field-input half" type="text" placeholder="RUT"
+                                   @bind="modelo.RutDenunciante" />
+                            <input class="field-input half" type="email" placeholder="Correo"
+                                   @bind="modelo.EmailDenunciante" />
+                        </div>
+                        <div class="form-row">
+                            <input class="field-input half" type="tel" placeholder="Teléfono"
+                                   @bind="modelo.TelefonoDenunciante" />
+                            <input class="field-input half" type="text" placeholder="Cargo"
+                                   @bind="modelo.CargoDenunciante" />
+                        </div>
+                        <label class="checkbox-option">
+                            <input type="checkbox" @bind="modelo.SolicitaReserva" />
+                            <span>Solicito confidencialidad de mis datos</span>
+                        </label>
+                    </div>
+                }
+
+                <div class="btn-row">
+                    <button class="btn-secondary-app" @onclick="() => { paso = 1; errorMensaje = null; }">← Volver</button>
+                    <button class="btn-primary-app" @onclick="IrPaso3">Revisar →</button>
+                </div>
+            </div>
+        }
+
+        <!-- ─── PASO 3: REVISIÓN ─── -->
+        @if (paso == 3)
+        {
+            <div class="step-content">
+                <h3 class="step-heading">Revisa antes de enviar</h3>
+                <p class="step-desc">Una vez enviada quedará registrada en el sistema.</p>
+
+                <div class="review-card">
+                    <div class="review-row">
+                        <span class="review-label">Tipo</span>
+                        <span>@(tiposDenuncia.FirstOrDefault(t => t.Id == modelo.TipoDenunciaId)?.Nombre ?? "Otra conducta")</span>
+                    </div>
+                    <div class="review-row">
+                        <span class="review-label">Modalidad</span>
+                        <span class="badge-app @(modelo.EsAnonima ? "badge-gray" : "badge-green")">
+                            @(modelo.EsAnonima ? "Anónima" : "Identificada")
+                        </span>
+                    </div>
+                    @if (modelo.FechaHechos.HasValue)
+                    {
+                        <div class="review-row">
+                            <span class="review-label">Fecha</span>
+                            <span>@modelo.FechaHechos.Value.ToString("dd/MM/yyyy")</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(modelo.LugarHechos))
+                    {
+                        <div class="review-row">
+                            <span class="review-label">Lugar</span>
+                            <span>@modelo.LugarHechos</span>
+                        </div>
+                    }
+                    <div class="review-row review-row-col">
+                        <span class="review-label">Descripción</span>
+                        <span class="review-text">@modelo.DescripcionHechos</span>
+                    </div>
+                    @if (!string.IsNullOrEmpty(modelo.NombresDenunciado))
+                    {
+                        <div class="review-row">
+                            <span class="review-label">Denunciado</span>
+                            <span>@modelo.NombresDenunciado @modelo.ApellidosDenunciado</span>
+                        </div>
+                    }
+                    @if (!modelo.EsAnonima && !string.IsNullOrEmpty(modelo.NombresDenunciante))
+                    {
+                        <div class="review-row">
+                            <span class="review-label">Denunciante</span>
+                            <span>@modelo.NombresDenunciante @modelo.ApellidosDenunciante</span>
+                        </div>
+                    }
+                </div>
+
+                <div class="alert-info">
+                    ℹ️ Al enviar confirmas que los hechos son verídicos conforme a tu conocimiento.
+                    La Ley N° 21.643 te protege de represalias.
+                </div>
+
+                <div class="btn-row">
+                    <button class="btn-secondary-app" @onclick="() => { paso = 2; errorMensaje = null; }" disabled="@enviando">
+                        ← Volver
+                    </button>
+                    <button class="btn-success-app" @onclick="EnviarAsync" disabled="@enviando">
+                        @if (enviando) { <span class="spinner-sm"></span> <span>Enviando...</span> }
+                        else { <span>✉️ Enviar denuncia</span> }
+                    </button>
+                </div>
+            </div>
+        }
+
+    }
+</div>
+
+@code {
+    private int paso = 1;
+    private bool cargando = true;
+    private bool enviando = false;
+    private bool tipoOtro = false;
+    private string? errorMensaje;
+    private List<TipoDenunciaDto> tiposDenuncia = [];
+    private readonly DenunciaFormModel modelo = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Config.EstaConfigurada)
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        tiposDenuncia = await Api.ObtenerTiposAsync(Config.EmpresaSlug);
+        cargando = false;
+    }
+
+    private void SeleccionarTipo(Guid id) { modelo.TipoDenunciaId = id; tipoOtro = false; }
+    private void SeleccionarOtro() { modelo.TipoDenunciaId = null; tipoOtro = true; }
+
+    private void IrPaso2()
+    {
+        if (!modelo.TipoDenunciaId.HasValue && !tipoOtro) return;
+        errorMensaje = null;
+        paso = 2;
+    }
+
+    private void IrPaso3()
+    {
+        if (string.IsNullOrWhiteSpace(modelo.DescripcionHechos) || modelo.DescripcionHechos.Length < 30)
+        { errorMensaje = "La descripción debe tener al menos 30 caracteres."; return; }
+        if (!modelo.EsAnonima && string.IsNullOrWhiteSpace(modelo.NombresDenunciante))
+        { errorMensaje = "Ingresa tu nombre o selecciona denuncia anónima."; return; }
+        errorMensaje = null;
+        paso = 3;
+    }
+
+    private async Task EnviarAsync()
+    {
+        enviando = true;
+        errorMensaje = null;
+
+        var request = new DenunciaRequest
+        {
+            TipoDenunciaId = modelo.TipoDenunciaId,
+            EsAnonima = modelo.EsAnonima,
+            DescripcionHechos = modelo.DescripcionHechos,
+            FechaHechos = modelo.FechaHechos,
+            LugarHechos = modelo.LugarHechos,
+            NombresDenunciado = modelo.NombresDenunciado,
+            ApellidosDenunciado = modelo.ApellidosDenunciado,
+            CargoDenunciado = modelo.CargoDenunciado,
+            RelacionConDenunciante = modelo.RelacionConDenunciante,
+            NombresDenunciante = modelo.NombresDenunciante,
+            ApellidosDenunciante = modelo.ApellidosDenunciante,
+            RutDenunciante = modelo.RutDenunciante,
+            EmailDenunciante = modelo.EmailDenunciante,
+            TelefonoDenunciante = modelo.TelefonoDenunciante,
+            CargoDenunciante = modelo.CargoDenunciante,
+            SolicitaReserva = modelo.SolicitaReserva
+        };
+
+        var resultado = await Api.EnviarDenunciaAsync(Config.EmpresaSlug, request);
+        enviando = false;
+
+        if (resultado.Exito)
+            Nav.NavigateTo($"/confirmacion/{resultado.Folio}");
+        else
+            errorMensaje = resultado.Error ?? "Error al enviar la denuncia.";
+    }
+
+    private void Volver()
+    {
+        if (paso > 1) { paso--; errorMensaje = null; }
+        else Nav.NavigateTo("/");
+    }
+
+    private static string ObtenerIcono(string nombre) => nombre.ToLower() switch
+    {
+        var n when n.Contains("sexual") => "🚫",
+        var n when n.Contains("acoso") => "⚠️",
+        var n when n.Contains("violencia") => "🤜",
+        var n when n.Contains("discrimin") => "⚖️",
+        var n when n.Contains("maltrato") => "😡",
+        _ => "📋"
+    };
+
+    private sealed class DenunciaFormModel
+    {
+        public Guid? TipoDenunciaId { get; set; }
+        public bool EsAnonima { get; set; } = true;
+        public string DescripcionHechos { get; set; } = string.Empty;
+        public DateTime? FechaHechos { get; set; }
+        public string? LugarHechos { get; set; }
+        public string? NombresDenunciado { get; set; }
+        public string? ApellidosDenunciado { get; set; }
+        public string? CargoDenunciado { get; set; }
+        public string? RelacionConDenunciante { get; set; }
+        public string? NombresDenunciante { get; set; }
+        public string? ApellidosDenunciante { get; set; }
+        public string? RutDenunciante { get; set; }
+        public string? EmailDenunciante { get; set; }
+        public string? TelefonoDenunciante { get; set; }
+        public string? CargoDenunciante { get; set; }
+        public bool SolicitaReserva { get; set; }
+    }
+}

@@ -1,0 +1,130 @@
+@page "/"
+@using LeyKarinApp.Services
+@using LeyKarinApp.Models
+@inject ConfiguracionService Config
+@inject DenunciaApiService Api
+@inject NavigationManager Nav
+
+<div class="app-screen">
+
+    <div class="brand-header">
+        <div class="brand-shield">🛡️</div>
+        <h1 class="brand-title">LeyKarin</h1>
+        <p class="brand-sub">Canal de Denuncias — Ley N° 21.643</p>
+    </div>
+
+    @if (Config.EstaConfigurada && empresaInfo != null)
+    {
+        <div class="config-card">
+            <div class="empresa-badge">
+                <span class="empresa-icon">🏢</span>
+                <div>
+                    <div class="empresa-label">Empresa conectada</div>
+                    <div class="empresa-nombre">@empresaInfo.Nombre</div>
+                </div>
+            </div>
+
+            <button class="btn-primary-app mt-3" @onclick="IrANuevaDenuncia">
+                ✉️&nbsp;&nbsp;Realizar una denuncia
+            </button>
+
+            <button class="btn-link-app" @onclick="CambiarEmpresa">
+                Cambiar empresa
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="config-card">
+            <h2 class="config-title">Conectar empresa</h2>
+            <p class="config-desc">
+                Ingresa la URL de la plataforma y el código de empresa
+                que te proporcionó tu empleador.
+            </p>
+
+            @if (!string.IsNullOrEmpty(errorConexion))
+            {
+                <div class="alert-error">⚠️ @errorConexion</div>
+            }
+
+            <div class="form-field">
+                <label class="field-label">URL del servidor</label>
+                <input class="field-input" type="url"
+                       placeholder="https://tuempresa.leykarin.cl"
+                       @bind="servidorUrl" @bind:event="oninput" />
+                <span class="field-hint">Ejemplo: https://demo.leykarin.cl</span>
+            </div>
+
+            <div class="form-field">
+                <label class="field-label">Código de empresa</label>
+                <input class="field-input" type="text"
+                       placeholder="demo"
+                       @bind="slug" @bind:event="oninput" />
+                <span class="field-hint">Disponible en el correo de bienvenida o intranet.</span>
+            </div>
+
+            <button class="btn-primary-app" @onclick="Conectar" disabled="@conectando">
+                @if (conectando) { <span class="spinner-sm"></span> <span>Conectando...</span> }
+                else { <span>Conectar</span> }
+            </button>
+        </div>
+    }
+
+    <div class="app-footer">
+        Proceso confidencial · Ley N° 21.643 · Tus datos están protegidos
+    </div>
+</div>
+
+@code {
+    private string servidorUrl = string.Empty;
+    private string slug = string.Empty;
+    private string? errorConexion;
+    private bool conectando;
+    private EmpresaInfoDto? empresaInfo;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Config.EstaConfigurada)
+        {
+            empresaInfo = await Api.ObtenerInfoEmpresaAsync(Config.EmpresaSlug);
+            if (empresaInfo == null) Config.Limpiar();
+        }
+    }
+
+    private async Task Conectar()
+    {
+        errorConexion = null;
+        if (string.IsNullOrWhiteSpace(servidorUrl))
+        { errorConexion = "Ingresa la URL del servidor."; return; }
+        if (string.IsNullOrWhiteSpace(slug))
+        { errorConexion = "Ingresa el código de empresa."; return; }
+
+        conectando = true;
+        Config.ServidorUrl = servidorUrl.Trim();
+        Config.EmpresaSlug = slug.Trim().ToLower();
+
+        var info = await Api.ObtenerInfoEmpresaAsync(Config.EmpresaSlug);
+        if (info == null)
+        {
+            Config.Limpiar();
+            errorConexion = "No se pudo conectar. Verifica la URL y el código.";
+            conectando = false;
+            return;
+        }
+
+        Config.EmpresaNombre = info.Nombre;
+        empresaInfo = info;
+        conectando = false;
+    }
+
+    private void CambiarEmpresa()
+    {
+        Config.Limpiar();
+        empresaInfo = null;
+        servidorUrl = string.Empty;
+        slug = string.Empty;
+        errorConexion = null;
+    }
+
+    private void IrANuevaDenuncia() => Nav.NavigateTo("/nueva-denuncia");
+}

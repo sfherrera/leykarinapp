@@ -1,0 +1,51 @@
+@page "/confirmacion/{folio}"
+@using LeyKarinApp.Services
+@inject ConfiguracionService Config
+@inject NavigationManager Nav
+
+<div class="app-screen">
+
+    <div class="success-screen">
+
+        <div class="success-icon-wrap">
+            <span class="success-icon">✅</span>
+        </div>
+
+        <h1 class="success-title">¡Denuncia recibida!</h1>
+        <p class="success-desc">
+            Tu denuncia ha sido registrada exitosamente en el sistema de
+            <strong>@Config.EmpresaNombre</strong>.
+        </p>
+
+        <div class="folio-card">
+            <p class="folio-label">Número de folio</p>
+            <p class="folio-number">@Folio</p>
+            <p class="folio-hint">Guarda este número para hacer seguimiento de tu denuncia.</p>
+        </div>
+
+        <div class="alert-info">
+            🛡️ El encargado de denuncias revisará tu caso y tomará
+            las medidas correspondientes conforme a la <strong>Ley N° 21.643</strong>.
+            Estás protegido/a contra represalias.
+        </div>
+
+        <button class="btn-primary-app" @onclick="NuevaDenuncia">
+            ✉️ Enviar otra denuncia
+        </button>
+
+        <button class="btn-secondary-app" @onclick="IrAlInicio">
+            ← Ir al inicio
+        </button>
+    </div>
+
+    <div class="app-footer">
+        Proceso confidencial · Ley N° 21.643 · Tus datos están protegidos
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Folio { get; set; } = string.Empty;
+
+    private void NuevaDenuncia() => Nav.NavigateTo("/nueva-denuncia");
+    private void IrAlInicio() => Nav.NavigateTo("/");
+}
